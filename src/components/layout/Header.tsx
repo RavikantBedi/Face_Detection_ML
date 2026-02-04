@@ -1,4 +1,4 @@
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, Search, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -10,6 +10,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 interface HeaderProps {
   title: string;
@@ -17,6 +20,15 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle }: HeaderProps) {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success('Signed out successfully');
+    navigate('/auth');
+  };
+
   return (
     <header className="flex items-center justify-between h-16 px-6 border-b border-border bg-background/80 backdrop-blur-sm">
       <div>
@@ -58,8 +70,8 @@ export function Header({ title, subtitle }: HeaderProps) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
-                <span>Dr. Sarah Chen</span>
-                <span className="text-xs font-normal text-muted-foreground">Research Lead</span>
+                <span>{user?.email}</span>
+                <span className="text-xs font-normal text-muted-foreground">Researcher</span>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -67,7 +79,13 @@ export function Header({ title, subtitle }: HeaderProps) {
             <DropdownMenuItem>System Status</DropdownMenuItem>
             <DropdownMenuItem>API Keys</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Sign out</DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-destructive focus:text-destructive"
+              onClick={handleSignOut}
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign out
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
