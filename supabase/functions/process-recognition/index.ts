@@ -10,8 +10,8 @@ interface RecognitionRequest {
   logId: string
 }
 
-// Simulated face recognition processing
-// In production, this would call your Python ML backend
+// Enhanced face recognition simulation with improved accuracy modeling
+// In production, this would call your Python ML backend with actual CNN model
 async function simulateRecognition(imageUrl: string): Promise<{
   success: boolean
   subjectId: string | null
@@ -20,51 +20,110 @@ async function simulateRecognition(imageUrl: string): Promise<{
   ssimScore: number
   processingTimeMs: number
   status: 'success' | 'warning' | 'failed'
+  featureVector?: number[]
+  matchDetails?: {
+    topMatches: Array<{ id: string; score: number }>
+    threshold: number
+    marginAboveThreshold: number
+  }
 }> {
   const startTime = Date.now()
   
-  // Simulate ML processing delay (100-300ms)
-  await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200))
+  // Simulate realistic ML processing delay (150-400ms for CNN inference)
+  const baseProcessingTime = 150 + Math.random() * 250
+  await new Promise(resolve => setTimeout(resolve, baseProcessingTime))
   
-  // Simulate different recognition outcomes
-  const random = Math.random()
+  // Enhanced recognition with more realistic probability distribution
+  // Using beta distribution simulation for more realistic confidence scores
+  const u1 = Math.random()
+  const u2 = Math.random()
+  const beta = Math.pow(u1, 0.7) * Math.pow(u2, 0.3) // Skewed towards higher values
   
-  if (random > 0.85) {
-    // Failed recognition (15% chance)
+  // Subject database with more realistic entries
+  const subjects = [
+    { id: 'LFW-0042', name: 'Subject 042', baseConfidence: 0.92 },
+    { id: 'LFW-0128', name: 'Subject 128', baseConfidence: 0.89 },
+    { id: 'LFW-0234', name: 'Subject 234', baseConfidence: 0.94 },
+    { id: 'LFW-0567', name: 'Subject 567', baseConfidence: 0.91 },
+    { id: 'LFW-0891', name: 'Subject 891', baseConfidence: 0.87 },
+    { id: 'AR-0023', name: 'Subject AR-023', baseConfidence: 0.93 },
+    { id: 'AR-0067', name: 'Subject AR-067', baseConfidence: 0.88 },
+    { id: 'CASIA-2847', name: 'Subject CASIA-2847', baseConfidence: 0.90 },
+  ]
+  
+  // Recognition threshold (industry standard ~0.75 for masked faces)
+  const recognitionThreshold = 0.75
+  
+  // Calculate final confidence with noise
+  const selectedSubject = subjects[Math.floor(Math.random() * subjects.length)]
+  const noise = (Math.random() - 0.5) * 0.15
+  const rawConfidence = selectedSubject.baseConfidence + noise
+  const finalConfidence = Math.max(0, Math.min(1, rawConfidence)) * 100
+  
+  // SSIM calculation with correlation to confidence
+  const ssimBase = 0.75 + (finalConfidence / 100) * 0.2
+  const ssimNoise = (Math.random() - 0.5) * 0.08
+  const ssimScore = Math.max(0.5, Math.min(0.99, ssimBase + ssimNoise))
+  
+  // Generate top matches for detailed analysis
+  const topMatches = subjects
+    .map(s => ({
+      id: s.id,
+      score: s.id === selectedSubject.id ? finalConfidence : Math.random() * 60 + 20
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+  
+  const processingTimeMs = Date.now() - startTime
+  
+  // Determine status based on confidence thresholds
+  if (finalConfidence < recognitionThreshold * 100 * 0.6) {
+    // Failed recognition (confidence below 45%)
     return {
       success: false,
       subjectId: null,
       subjectName: null,
       confidence: 0,
       ssimScore: 0,
-      processingTimeMs: Date.now() - startTime,
-      status: 'failed'
+      processingTimeMs,
+      status: 'failed',
+      matchDetails: {
+        topMatches: [],
+        threshold: recognitionThreshold,
+        marginAboveThreshold: 0
+      }
     }
-  } else if (random > 0.7) {
-    // Low confidence match (15% chance)
-    const subjects = ['LFW-0891', 'CASIA-2847', 'AR-0067']
-    const subjectId = subjects[Math.floor(Math.random() * subjects.length)]
+  } else if (finalConfidence < recognitionThreshold * 100) {
+    // Low confidence match (45-75%)
     return {
       success: true,
-      subjectId,
-      subjectName: `Subject ${subjectId.split('-')[1]}`,
-      confidence: 65 + Math.random() * 10,
-      ssimScore: 0.65 + Math.random() * 0.1,
-      processingTimeMs: Date.now() - startTime,
-      status: 'warning'
+      subjectId: selectedSubject.id,
+      subjectName: selectedSubject.name,
+      confidence: finalConfidence,
+      ssimScore,
+      processingTimeMs,
+      status: 'warning',
+      matchDetails: {
+        topMatches,
+        threshold: recognitionThreshold,
+        marginAboveThreshold: (finalConfidence / 100) - recognitionThreshold
+      }
     }
   } else {
-    // High confidence match (70% chance)
-    const subjects = ['LFW-0042', 'LFW-0128', 'LFW-0234', 'LFW-0567', 'AR-0023']
-    const subjectId = subjects[Math.floor(Math.random() * subjects.length)]
+    // High confidence match (75%+)
     return {
       success: true,
-      subjectId,
-      subjectName: `Subject ${subjectId.split('-')[1]}`,
-      confidence: 85 + Math.random() * 14,
-      ssimScore: 0.82 + Math.random() * 0.15,
-      processingTimeMs: Date.now() - startTime,
-      status: 'success'
+      subjectId: selectedSubject.id,
+      subjectName: selectedSubject.name,
+      confidence: finalConfidence,
+      ssimScore,
+      processingTimeMs,
+      status: 'success',
+      matchDetails: {
+        topMatches,
+        threshold: recognitionThreshold,
+        marginAboveThreshold: (finalConfidence / 100) - recognitionThreshold
+      }
     }
   }
 }

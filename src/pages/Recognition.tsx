@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, Wand2, RotateCcw, Download } from 'lucide-react';
+import { ArrowRight, Wand2, RotateCcw, Download, FileJson } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { FaceUploadZone } from '@/components/dashboard/FaceUploadZone';
 import { PipelineVisualization } from '@/components/dashboard/PipelineVisualization';
@@ -9,6 +9,13 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRecognitionLogs, RecognitionLog } from '@/hooks/useRecognitionLogs';
 import { toast } from 'sonner';
+import { downloadReport, downloadJSONReport } from '@/utils/reportGenerator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export default function Recognition() {
   const { logs, createLog, processRecognition } = useRecognitionLogs();
@@ -44,6 +51,20 @@ export default function Recognition() {
     setUploadedImage(null);
     setCurrentResult(null);
     setIsProcessing(false);
+  };
+
+  const handleDownloadText = () => {
+    if (displayResult) {
+      downloadReport(displayResult);
+      toast.success('Text report downloaded');
+    }
+  };
+
+  const handleDownloadJSON = () => {
+    if (displayResult) {
+      downloadJSONReport(displayResult);
+      toast.success('JSON report downloaded');
+    }
   };
 
   // Get updated result from logs
@@ -124,10 +145,24 @@ export default function Recognition() {
                     <RecognitionResults result={displayResult} isProcessing={isProcessing} />
                     {displayResult.status !== 'pending' && displayResult.status !== 'processing' && (
                       <div className="mt-4 flex gap-2">
-                        <Button variant="secondary" size="sm" className="gap-2">
-                          <Download className="w-4 h-4" />
-                          Download Report
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="secondary" size="sm" className="gap-2">
+                              <Download className="w-4 h-4" />
+                              Download Report
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem onClick={handleDownloadText}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Text Report (.txt)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleDownloadJSON}>
+                              <FileJson className="w-4 h-4 mr-2" />
+                              JSON Report (.json)
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     )}
                   </>
