@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Database, Users, Image, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -16,9 +17,10 @@ const databases: DatabaseInfo[] = [
   { name: 'DB-3', description: 'Lower face regions', subjects: 150, images: 3956, icon: Users, color: 'text-success' },
 ];
 
-export function DatabaseStats() {
+export const DatabaseStats = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  function DatabaseStats(props, ref) {
   return (
-    <div className="data-card rounded-xl border border-border">
+    <div ref={ref} className="data-card rounded-xl border border-border" {...props}>
       <div className="p-4 border-b border-border">
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-primary" />
@@ -56,4 +58,4 @@ export function DatabaseStats() {
       </div>
     </div>
   );
-}
+});
