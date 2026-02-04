@@ -1,46 +1,66 @@
 import { useState, useCallback } from 'react';
-import { Upload, ScanFace, X, Image as ImageIcon } from 'lucide-react';
+import { Upload, ScanFace, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useFileUpload } from '@/hooks/useFileUpload';
+import { Progress } from '@/components/ui/progress';
 
 interface FaceUploadZoneProps {
-  onImageSelect?: (file: File) => void;
+  onImageUploaded?: (url: string, path: string) => void;
   className?: string;
 }
 
-export function FaceUploadZone({ onImageSelect, className }: FaceUploadZoneProps) {
+export function FaceUploadZone({ onImageUploaded, className }: FaceUploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadedPath, setUploadedPath] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  
+  const { uploadFile, deleteFile, uploading, progress } = useFileUpload();
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
 
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
-      handleFile(file);
+      await handleFile(file);
     }
   }, []);
 
-  const handleFile = (file: File) => {
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
+  const handleFile = async (file: File) => {
+    // Show preview immediately
+    const localUrl = URL.createObjectURL(file);
+    setPreviewUrl(localUrl);
     setScanning(true);
-    onImageSelect?.(file);
 
-    // Simulate scanning animation
-    setTimeout(() => setScanning(false), 2500);
+    // Upload to storage
+    const result = await uploadFile(file);
+    
+    if (result) {
+      setUploadedPath(result.path);
+      onImageUploaded?.(result.url, result.path);
+      
+      // Keep scanning animation a bit longer
+      setTimeout(() => setScanning(false), 1000);
+    } else {
+      // Upload failed, clear preview
+      clearImage();
+    }
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) handleFile(file);
+    if (file) await handleFile(file);
   };
 
-  const clearImage = () => {
+  const clearImage = async () => {
+    if (uploadedPath) {
+      await deleteFile(uploadedPath);
+    }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
+    setUploadedPath(null);
     setScanning(false);
   };
 
@@ -72,22 +92,34 @@ export function FaceUploadZone({ onImageSelect, className }: FaceUploadZoneProps
           />
 
           {/* Scanner overlay */}
-          {scanning && (
+          {(scanning || uploading) && (
             <div className="absolute inset-0 overflow-hidden">
               <div className="absolute left-0 right-0 h-1 scanner-line animate-scan" />
               <div className="absolute inset-0 bg-primary/5" />
             </div>
           )}
 
+          {/* Upload progress */}
+          {uploading && (
+            <div className="absolute bottom-16 left-4 right-4">
+              <Progress value={progress} className="h-1" />
+              <p className="text-xs text-center text-muted-foreground mt-1">Uploading... {progress}%</p>
+            </div>
+          )}
+
           {/* Status badge */}
           <div className={cn(
             "absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium",
-            scanning 
+            uploading || scanning 
               ? "bg-primary/20 text-primary border border-primary/30" 
               : "bg-success/20 text-success border border-success/30"
           )}>
-            <ScanFace className="w-3.5 h-3.5" />
-            {scanning ? "Scanning..." : "Ready"}
+            {uploading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <ScanFace className="w-3.5 h-3.5" />
+            )}
+            {uploading ? "Uploading..." : scanning ? "Scanning..." : "Ready"}
           </div>
 
           {/* Clear button */}
@@ -96,6 +128,7 @@ export function FaceUploadZone({ onImageSelect, className }: FaceUploadZoneProps
             variant="secondary"
             className="absolute bottom-4 right-4"
             onClick={clearImage}
+            disabled={uploading}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -104,7 +137,7 @@ export function FaceUploadZone({ onImageSelect, className }: FaceUploadZoneProps
         <label className="flex flex-col items-center justify-center p-8 cursor-pointer aspect-square">
           <input
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             className="hidden"
             onChange={handleFileInput}
           />
@@ -123,7 +156,7 @@ export function FaceUploadZone({ onImageSelect, className }: FaceUploadZoneProps
           </p>
           <p className="text-xs text-muted-foreground text-center">
             Drag & drop or click to browse<br />
-            PNG, JPG up to 10MB
+            PNG, JPG, WebP up to 10MB
           </p>
         </label>
       )}

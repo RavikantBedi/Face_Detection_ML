@@ -7,30 +7,49 @@ import { RecognitionResults } from '@/components/dashboard/RecognitionResults';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useRecognitionLogs, RecognitionLog } from '@/hooks/useRecognitionLogs';
+import { toast } from 'sonner';
 
 export default function Recognition() {
-  const [hasImage, setHasImage] = useState(false);
+  const { logs, createLog, processRecognition } = useRecognitionLogs();
+  const [uploadedImage, setUploadedImage] = useState<{ url: string; path: string } | null>(null);
+  const [currentResult, setCurrentResult] = useState<RecognitionLog | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showResults, setShowResults] = useState(false);
 
-  const handleImageSelect = (file: File) => {
-    setHasImage(true);
-    setShowResults(false);
+  const handleImageUploaded = (url: string, path: string) => {
+    setUploadedImage({ url, path });
+    setCurrentResult(null);
   };
 
-  const startRecognition = () => {
+  const startRecognition = async () => {
+    if (!uploadedImage) return;
+
+    // Create log entry
+    const log = await createLog(uploadedImage.path);
+    if (!log) return;
+
+    setCurrentResult(log);
     setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      setShowResults(true);
-    }, 3000);
+
+    // Process recognition
+    const result = await processRecognition(uploadedImage.url, log.id);
+    setIsProcessing(false);
+
+    if (result?.success) {
+      toast.success('Recognition complete!');
+    }
   };
 
   const reset = () => {
-    setHasImage(false);
+    setUploadedImage(null);
+    setCurrentResult(null);
     setIsProcessing(false);
-    setShowResults(false);
   };
+
+  // Get updated result from logs
+  const displayResult = currentResult 
+    ? logs.find(l => l.id === currentResult.id) || currentResult
+    : null;
 
   return (
     <DashboardLayout 
@@ -56,7 +75,7 @@ export default function Recognition() {
               <Card className="p-6 border-border bg-card">
                 <h3 className="font-semibold mb-4">Masked Face Input</h3>
                 <FaceUploadZone 
-                  onImageSelect={handleImageSelect} 
+                  onImageUploaded={handleImageUploaded} 
                   className="min-h-[350px]"
                 />
               </Card>
@@ -67,7 +86,7 @@ export default function Recognition() {
               <Button
                 size="lg"
                 onClick={startRecognition}
-                disabled={!hasImage || isProcessing}
+                disabled={!uploadedImage || isProcessing}
                 className="w-full max-w-[160px] gap-2"
               >
                 {isProcessing ? (
@@ -83,7 +102,7 @@ export default function Recognition() {
                 )}
               </Button>
               
-              {showResults && (
+              {displayResult && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -100,15 +119,17 @@ export default function Recognition() {
             <div className="lg:col-span-2">
               <Card className="p-6 border-border bg-card">
                 <h3 className="font-semibold mb-4">Recognition Output</h3>
-                {showResults ? (
+                {displayResult ? (
                   <>
-                    <RecognitionResults />
-                    <div className="mt-4 flex gap-2">
-                      <Button variant="secondary" size="sm" className="gap-2">
-                        <Download className="w-4 h-4" />
-                        Download Report
-                      </Button>
-                    </div>
+                    <RecognitionResults result={displayResult} isProcessing={isProcessing} />
+                    {displayResult.status !== 'pending' && displayResult.status !== 'processing' && (
+                      <div className="mt-4 flex gap-2">
+                        <Button variant="secondary" size="sm" className="gap-2">
+                          <Download className="w-4 h-4" />
+                          Download Report
+                        </Button>
+                      </div>
+                    )}
                   </>
                 ) : isProcessing ? (
                   <RecognitionResults isProcessing />
