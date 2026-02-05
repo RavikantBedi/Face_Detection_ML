@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 interface UploadResult {
@@ -11,7 +10,20 @@ interface UploadResult {
 export function useFileUpload() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const { user } = useAuth();
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Get user from session instead of context to avoid provider dependency
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUserId(session?.user?.id ?? null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setUserId(session?.user?.id ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const validateFile = (file: File): string | null => {
     const maxSize = 10 * 1024 * 1024; // 10MB
@@ -29,7 +41,7 @@ export function useFileUpload() {
   };
 
   const uploadFile = async (file: File): Promise<UploadResult | null> => {
-    if (!user) {
+    if (!userId) {
       toast.error('You must be logged in to upload files');
       return null;
     }
@@ -46,7 +58,7 @@ export function useFileUpload() {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
+      const filePath = `${userId}/${fileName}`;
 
       setProgress(30);
 
