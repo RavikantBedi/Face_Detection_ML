@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Loader2, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type StepStatus = 'pending' | 'active' | 'completed';
+type PipelinePhase = 'idle' | 'processing' | 'done';
 
 interface PipelineStep {
   id: number;
@@ -11,31 +12,71 @@ interface PipelineStep {
   status: StepStatus;
 }
 
-const initialSteps: PipelineStep[] = [
-  { id: 1, name: 'Upload', description: 'Masked face input', status: 'completed' },
-  { id: 2, name: 'Extract', description: 'Upper face region', status: 'completed' },
-  { id: 3, name: 'Match', description: 'Find candidate', status: 'active' },
-  { id: 4, name: 'Transform', description: 'Rotation estimation', status: 'pending' },
-  { id: 5, name: 'Reconstruct', description: 'Face merge', status: 'pending' },
-  { id: 6, name: 'Recognize', description: 'Identity match', status: 'pending' },
+const stepTemplate: Omit<PipelineStep, 'status'>[] = [
+  { id: 1, name: 'Upload', description: 'Masked face input' },
+  { id: 2, name: 'Extract', description: 'Upper-face / periocular' },
+  { id: 3, name: 'Match', description: 'Candidate search' },
+  { id: 4, name: 'Transform', description: 'Pose alignment' },
+  { id: 5, name: 'Reconstruct', description: 'Occlusion-aware (N/A)' },
+  { id: 6, name: 'Recognize', description: 'Embedding similarity' },
 ];
 
 interface PipelineVisualizationProps {
-  animated?: boolean;
+  phase?: PipelinePhase;
+  hasInput?: boolean;
 }
 
-export function PipelineVisualization({ animated = false }: PipelineVisualizationProps) {
-  const [steps, setSteps] = useState(initialSteps);
+function buildSteps(phase: PipelinePhase, hasInput: boolean): PipelineStep[] {
+  // Note: This UI is a didactic stepper. The backend is recognition-only.
+  // “Reconstruct” is intentionally marked N/A in the description.
+  if (!hasInput) {
+    return stepTemplate.map((s) => ({ ...s, status: 'pending' as const }));
+  }
+
+  if (phase === 'idle') {
+    return stepTemplate.map((s, idx) => ({
+      ...s,
+      status: idx === 0 ? ('completed' as const) : ('pending' as const),
+    }));
+  }
+
+  if (phase === 'done') {
+    return stepTemplate.map((s) => ({ ...s, status: 'completed' as const }));
+  }
+
+  // processing
+  return stepTemplate.map((s, idx) => ({
+    ...s,
+    status: idx === 1 ? ('active' as const) : idx === 0 ? ('completed' as const) : ('pending' as const),
+  }));
+}
+
+export function PipelineVisualization({ phase = 'idle', hasInput = false }: PipelineVisualizationProps) {
+  const intervalRef = useRef<number | null>(null);
+  const baseSteps = useMemo(() => buildSteps(phase, hasInput), [phase, hasInput]);
+  const [steps, setSteps] = useState<PipelineStep[]>(baseSteps);
+
+  // Keep steps in sync when phase changes (e.g., processing → done).
+  useEffect(() => {
+    setSteps(baseSteps);
+  }, [baseSteps]);
 
   useEffect(() => {
-    if (!animated) return;
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
 
-    const interval = setInterval(() => {
+    if (phase !== 'processing' || !hasInput) return;
+
+    intervalRef.current = window.setInterval(() => {
       setSteps(currentSteps => {
         const activeIndex = currentSteps.findIndex(s => s.status === 'active');
-        if (activeIndex === -1 || activeIndex >= currentSteps.length - 1) {
-          // Reset
-          return initialSteps;
+        if (activeIndex === -1) return currentSteps;
+
+        // If the last step is active, keep it active until phase flips to "done".
+        if (activeIndex >= currentSteps.length - 1) {
+          return currentSteps;
         }
 
         return currentSteps.map((step, idx) => {
@@ -44,10 +85,15 @@ export function PipelineVisualization({ animated = false }: PipelineVisualizatio
           return step;
         });
       });
-    }, 2000);
+    }, 800);
 
-    return () => clearInterval(interval);
-  }, [animated]);
+    return () => {
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [phase, hasInput]);
 
   return (
     <div className="relative">

@@ -196,8 +196,14 @@ export function RecognitionResults({ result, isProcessing = false }: Recognition
               <Target className="w-4 h-4 text-muted-foreground" />
               <span className="text-xs text-muted-foreground uppercase tracking-wider">Embedding Similarity</span>
               <Tooltip>
-                <TooltipTrigger>
-                  <Info className="w-3 h-3 text-muted-foreground" />
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+                  >
+                    <Info className="w-3 h-3 text-muted-foreground" />
+                    <span className="sr-only">About embedding similarity</span>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="text-xs">Cosine similarity between query and gallery embeddings. 
@@ -237,8 +243,14 @@ export function RecognitionResults({ result, isProcessing = false }: Recognition
               <Scan className="w-4 h-4 text-muted-foreground" />
               <span className="text-xs text-muted-foreground uppercase tracking-wider">SSIM Score</span>
               <Tooltip>
-                <TooltipTrigger>
-                  <Info className="w-3 h-3 text-muted-foreground" />
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+                  >
+                    <Info className="w-3 h-3 text-muted-foreground" />
+                    <span className="sr-only">About SSIM</span>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
                   <p className="text-xs">Periocular region structural similarity. 
