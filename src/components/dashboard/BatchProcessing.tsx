@@ -15,6 +15,7 @@
  } from '@/components/ui/dropdown-menu';
  import { ScrollArea } from '@/components/ui/scroll-area';
  import { cn } from '@/lib/utils';
+ import { BatchResultModal } from './BatchResultModal';
  
  interface BatchResult {
    imageId: string;
@@ -29,6 +30,7 @@
    const [results, setResults] = useState<BatchResult[]>([]);
    const [isProcessing, setIsProcessing] = useState(false);
    const [currentIndex, setCurrentIndex] = useState(0);
+   const [selectedResult, setSelectedResult] = useState<BatchResult | null>(null);
  
    const readyImages = images.filter(i => i.status === 'uploaded');
    const canProcess = readyImages.length > 0 && !isProcessing;
@@ -298,13 +300,14 @@
                    <div
                      key={result.imageId}
                      className={cn(
-                       "p-3 rounded-lg border",
+                       "p-3 rounded-lg border cursor-pointer transition-colors hover:bg-accent/50",
                        result.status === 'success' && "bg-success/5 border-success/30",
                        result.status === 'warning' && "bg-warning/5 border-warning/30",
                        result.status === 'failed' && "bg-destructive/5 border-destructive/30",
                        result.status === 'processing' && "bg-primary/5 border-primary/30",
                        result.status === 'pending' && "bg-muted/50 border-border",
                      )}
+                     onClick={() => result.status !== 'pending' && result.status !== 'processing' && setSelectedResult(result)}
                    >
                      <div className="flex items-center gap-3">
                        {result.status === 'processing' && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
@@ -340,6 +343,15 @@
            </div>
          )}
        </Card>
+       
+       {/* Detail Modal */}
+       <BatchResultModal
+         open={!!selectedResult}
+         onOpenChange={(open) => !open && setSelectedResult(null)}
+         imageName={selectedResult?.imageName || ''}
+         result={selectedResult?.log || null}
+         status={selectedResult?.status || ''}
+       />
      </div>
    );
  }
