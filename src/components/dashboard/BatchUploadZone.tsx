@@ -1,10 +1,12 @@
  import { useState, useCallback, useRef } from 'react';
- import { Upload, X, ImageIcon, Loader2, FileImage } from 'lucide-react';
+ import { Upload, X, ImageIcon, Loader2, FileArchive } from 'lucide-react';
  import { cn } from '@/lib/utils';
  import { Button } from '@/components/ui/button';
  import { useFileUpload } from '@/hooks/useFileUpload';
  import { Progress } from '@/components/ui/progress';
  import { ScrollArea } from '@/components/ui/scroll-area';
+ import { toast } from 'sonner';
+ import JSZip from 'jszip';
  
  export interface BatchImage {
    id: string;
@@ -24,6 +26,7 @@
  
  export function BatchUploadZone({ images: imagesProp, onImagesChange, disabled, className }: BatchUploadZoneProps) {
    const [isDragging, setIsDragging] = useState(false);
+   const [isExtractingZip, setIsExtractingZip] = useState(false);
    const { uploadFile } = useFileUpload();
    const imagesRef = useRef(imagesProp);
    imagesRef.current = imagesProp;
@@ -33,9 +36,72 @@
      setIsDragging(false);
      if (disabled) return;
  
-     const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-     await addFiles(files);
+     const droppedFiles = Array.from(e.dataTransfer.files);
+     await processDroppedFiles(droppedFiles);
    }, [disabled]);
+ 
+   const processDroppedFiles = async (files: File[]) => {
+     const imageFiles: File[] = [];
+     const zipFiles: File[] = [];
+ 
+     for (const file of files) {
+       if (file.type.startsWith('image/')) {
+         imageFiles.push(file);
+       } else if (file.type === 'application/zip' || file.type === 'application/x-zip-compressed' || file.name.endsWith('.zip')) {
+         zipFiles.push(file);
+       }
+     }
+ 
+     // Extract images from ZIP files
+     for (const zipFile of zipFiles) {
+       const extractedImages = await extractImagesFromZip(zipFile);
+       imageFiles.push(...extractedImages);
+     }
+ 
+     if (imageFiles.length > 0) {
+       await addFiles(imageFiles);
+     } else if (zipFiles.length > 0) {
+       toast.error('No images found in ZIP file');
+     }
+   };
+ 
+   const extractImagesFromZip = async (zipFile: File): Promise<File[]> => {
+     setIsExtractingZip(true);
+     const extractedFiles: File[] = [];
+ 
+     try {
+       const zip = await JSZip.loadAsync(zipFile);
+       const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+ 
+       const promises: Promise<void>[] = [];
+ 
+       zip.forEach((relativePath, zipEntry) => {
+         if (zipEntry.dir) return;
+ 
+         const fileName = relativePath.split('/').pop() || relativePath;
+         const ext = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+ 
+         if (imageExtensions.includes(ext)) {
+           const promise = zipEntry.async('blob').then(blob => {
+             const mimeType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+             const file = new File([blob], fileName, { type: mimeType });
+             extractedFiles.push(file);
+           });
+           promises.push(promise);
+         }
+       });
+ 
+       await Promise.all(promises);
+       toast.success(`Extracted ${extractedFiles.length} images from ${zipFile.name}`);
+     } catch (error) {
+       console.error('Error extracting ZIP:', error);
+       toast.error(`Failed to extract ${zipFile.name}`);
+     } finally {
+       setIsExtractingZip(false);
+     }
+ 
+     return extractedFiles;
+   };
  
    const addFiles = async (files: File[]) => {
      const newImages: BatchImage[] = files.map(file => ({
@@ -82,7 +148,7 @@
  
    const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
      const files = Array.from(e.target.files || []);
-     if (files.length > 0) await addFiles(files);
+     if (files.length > 0) await processDroppedFiles(files);
      e.target.value = '';
    };
  
@@ -118,7 +184,7 @@
          <label className="flex flex-col items-center justify-center p-8 cursor-pointer">
            <input
              type="file"
-             accept="image/jpeg,image/png,image/webp"
+             accept="image/jpeg,image/png,image/webp,.zip,application/zip"
              multiple
              className="hidden"
              onChange={handleFileInput}
@@ -128,18 +194,20 @@
              "p-4 rounded-full mb-4 transition-all duration-300",
              isDragging ? "bg-primary/20" : "bg-muted"
            )}>
-             {isDragging ? (
+             {isExtractingZip ? (
+               <Loader2 className="w-8 h-8 text-primary animate-spin" />
+             ) : isDragging ? (
                <ImageIcon className="w-8 h-8 text-primary" />
              ) : (
                <Upload className="w-8 h-8 text-muted-foreground" />
              )}
            </div>
            <p className="text-sm font-medium mb-1">
-             {isDragging ? "Drop images here" : "Upload multiple images"}
+             {isExtractingZip ? "Extracting ZIP..." : isDragging ? "Drop images or ZIP here" : "Upload images or ZIP file"}
            </p>
            <p className="text-xs text-muted-foreground text-center">
-             Drag & drop or click to select multiple files<br />
-             PNG, JPG, WebP up to 10MB each
+             Drag & drop images or a ZIP file<br />
+             PNG, JPG, WebP, ZIP supported
            </p>
          </label>
        </div>
