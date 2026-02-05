@@ -44,6 +44,13 @@ const Index = () => {
     ? logs.find(l => l.id === currentResult.id) || currentResult
     : null;
 
+  const hasInput = !!currentResult;
+  const pipelinePhase: 'idle' | 'processing' | 'done' = !hasInput
+    ? 'idle'
+    : (displayResult && displayResult.status !== 'pending' && displayResult.status !== 'processing')
+      ? 'done'
+      : 'processing';
+
   return (
     <DashboardLayout 
       title="Dashboard" 
@@ -87,7 +94,7 @@ const Index = () => {
           <h2 className="text-lg font-semibold">Recognition Pipeline</h2>
           <p className="text-sm text-muted-foreground">Real-time processing stages visualization</p>
         </div>
-        <PipelineVisualization animated={isProcessing} />
+        <PipelineVisualization phase={pipelinePhase} hasInput={hasInput} />
       </Card>
 
       {/* Main Content Grid */}

@@ -72,6 +72,14 @@ export default function Recognition() {
     ? logs.find(l => l.id === currentResult.id) || currentResult
     : null;
 
+  const pipelinePhase: 'idle' | 'processing' | 'done' = !uploadedImage
+    ? 'idle'
+    : (displayResult && displayResult.status !== 'pending' && displayResult.status !== 'processing')
+      ? 'done'
+      : (isProcessing || !!displayResult)
+        ? 'processing'
+        : 'idle';
+
   return (
     <DashboardLayout 
       title="Face Recognition" 
@@ -86,7 +94,7 @@ export default function Recognition() {
         <TabsContent value="single" className="space-y-6">
           {/* Pipeline Status */}
           <Card className="p-6 border-border bg-card">
-            <PipelineVisualization animated={isProcessing} />
+            <PipelineVisualization phase={pipelinePhase} hasInput={!!uploadedImage} />
           </Card>
 
           {/* Main Processing Area */}
