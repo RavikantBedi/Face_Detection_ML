@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -20,39 +21,42 @@ export interface RecognitionLog {
   updated_at: string;
 }
 
+const QUERY_KEY = 'recognition-logs';
+
+async function fetchRecognitionLogs(userId: string): Promise<RecognitionLog[]> {
+  const { data, error } = await supabase
+    .from('recognition_logs')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error('Error fetching logs:', error);
+    throw error;
+  }
+
+  return data as RecognitionLog[];
+}
+
 export function useRecognitionLogs() {
-  const [logs, setLogs] = useState<RecognitionLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const fetchLogs = useCallback(async () => {
-    if (!user) return;
+  const { data: logs = [], isLoading: loading } = useQuery({
+    queryKey: [QUERY_KEY, user?.id],
+    queryFn: () => fetchRecognitionLogs(user!.id),
+    enabled: !!user,
+    staleTime: 30000, // Data is fresh for 30 seconds
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+  });
 
-    const { data, error } = await supabase
-      .from('recognition_logs')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) {
-      console.error('Error fetching logs:', error);
-      toast.error('Failed to load recognition history');
-    } else {
-      setLogs(data as RecognitionLog[]);
-    }
-    setLoading(false);
-  }, [user]);
-
-  // Subscribe to realtime updates
+  // Subscribe to realtime updates - single subscription managed by React Query
   useEffect(() => {
     if (!user) return;
 
-    fetchLogs();
-
-    // Set up realtime subscription
     const channel: RealtimeChannel = supabase
-      .channel('recognition-logs-changes')
+      .channel(`recognition-logs-${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -64,17 +68,18 @@ export function useRecognitionLogs() {
         (payload) => {
           console.log('Realtime update:', payload);
           
-          if (payload.eventType === 'INSERT') {
-            setLogs(prev => [payload.new as RecognitionLog, ...prev].slice(0, 50));
-          } else if (payload.eventType === 'UPDATE') {
-            setLogs(prev => 
-              prev.map(log => 
+          queryClient.setQueryData<RecognitionLog[]>([QUERY_KEY, user.id], (old = []) => {
+            if (payload.eventType === 'INSERT') {
+              return [payload.new as RecognitionLog, ...old].slice(0, 50);
+            } else if (payload.eventType === 'UPDATE') {
+              return old.map(log => 
                 log.id === payload.new.id ? (payload.new as RecognitionLog) : log
-              )
-            );
-          } else if (payload.eventType === 'DELETE') {
-            setLogs(prev => prev.filter(log => log.id !== payload.old.id));
-          }
+              );
+            } else if (payload.eventType === 'DELETE') {
+              return old.filter(log => log.id !== payload.old.id);
+            }
+            return old;
+          });
         }
       )
       .subscribe();
@@ -82,9 +87,9 @@ export function useRecognitionLogs() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, fetchLogs]);
+  }, [user, queryClient]);
 
-  const createLog = async (imagePath: string): Promise<RecognitionLog | null> => {
+  const createLog = useCallback(async (imagePath: string): Promise<RecognitionLog | null> => {
     if (!user) return null;
 
     const { data, error } = await supabase
@@ -104,9 +109,9 @@ export function useRecognitionLogs() {
     }
 
     return data as RecognitionLog;
-  };
+  }, [user]);
 
-  const processRecognition = async (imageUrl: string, logId: string) => {
+  const processRecognition = useCallback(async (imageUrl: string, logId: string) => {
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session) {
@@ -131,21 +136,35 @@ export function useRecognitionLogs() {
       toast.error('Recognition processing failed');
       return null;
     }
-  };
+  }, []);
 
-  // Calculate stats
-  const stats = {
-    total: logs.length,
-    successful: logs.filter(l => l.status === 'success').length,
-    warnings: logs.filter(l => l.status === 'warning').length,
-    failed: logs.filter(l => l.status === 'failed').length,
-    avgConfidence: logs.filter(l => l.confidence).reduce((acc, l) => acc + (l.confidence || 0), 0) / 
-      (logs.filter(l => l.confidence).length || 1),
-    avgProcessingTime: logs.filter(l => l.processing_time_ms).reduce((acc, l) => acc + (l.processing_time_ms || 0), 0) / 
-      (logs.filter(l => l.processing_time_ms).length || 1),
-    avgSsim: logs.filter(l => l.ssim_score).reduce((acc, l) => acc + (l.ssim_score || 0), 0) / 
-      (logs.filter(l => l.ssim_score).length || 1),
-  };
+  // Memoize stats calculation to avoid recalculating on every render
+  const stats = useMemo(() => {
+    const successfulLogs = logs.filter(l => l.status === 'success');
+    const logsWithConfidence = logs.filter(l => l.confidence !== null);
+    const logsWithProcessingTime = logs.filter(l => l.processing_time_ms !== null);
+    const logsWithSsim = logs.filter(l => l.ssim_score !== null);
+
+    return {
+      total: logs.length,
+      successful: successfulLogs.length,
+      warnings: logs.filter(l => l.status === 'warning').length,
+      failed: logs.filter(l => l.status === 'failed').length,
+      avgConfidence: logsWithConfidence.length > 0
+        ? logsWithConfidence.reduce((acc, l) => acc + (l.confidence || 0), 0) / logsWithConfidence.length
+        : 0,
+      avgProcessingTime: logsWithProcessingTime.length > 0
+        ? logsWithProcessingTime.reduce((acc, l) => acc + (l.processing_time_ms || 0), 0) / logsWithProcessingTime.length
+        : 0,
+      avgSsim: logsWithSsim.length > 0
+        ? logsWithSsim.reduce((acc, l) => acc + (l.ssim_score || 0), 0) / logsWithSsim.length
+        : 0,
+    };
+  }, [logs]);
+
+  const refetch = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: [QUERY_KEY, user?.id] });
+  }, [queryClient, user?.id]);
 
   return {
     logs,
@@ -153,6 +172,6 @@ export function useRecognitionLogs() {
     stats,
     createLog,
     processRecognition,
-    refetch: fetchLogs
+    refetch
   };
 }
