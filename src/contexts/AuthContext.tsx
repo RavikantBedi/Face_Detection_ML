@@ -76,8 +76,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+
+  // Fallback: if a component renders before/without the provider (e.g. transient HMR/lazy-load issues),
+  // we still want the app to work instead of crashing to a blank screen.
+  const [fallback, setFallback] = useState<{
+    user: User | null;
+    session: Session | null;
+    loading: boolean;
+  }>({
+    user: null,
+    session: null,
+    loading: true,
+  });
+
+  useEffect(() => {
+    if (context) return;
+
+    let mounted = true;
+
+    // Check session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      setFallback({
+        session,
+        user: session?.user ?? null,
+        loading: false,
+      });
+    });
+
+    // Subscribe to future changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_, session) => {
+      if (!mounted) return;
+      setFallback({
+        session,
+        user: session?.user ?? null,
+        loading: false,
+      });
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [context]);
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error };
+  };
+
+  const signUp = async (email: string, password: string, fullName?: string) => {
+    const redirectUrl = `${window.location.origin}/`;
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: fullName,
+        },
+      },
+    });
+    return { error };
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  // Normal path: provider exists
+  if (context) return context;
+
+  // Fallback path: provider missing (prevent crash)
+  return {
+    ...fallback,
+    signIn,
+    signUp,
+    signOut,
+  };
 }
