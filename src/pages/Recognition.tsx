@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRecognitionLogs, RecognitionLog } from '@/hooks/useRecognitionLogs';
 import { toast } from 'sonner';
 import { downloadReport, downloadJSONReport } from '@/utils/reportGenerator';
+ import { BatchProcessing } from '@/components/dashboard/BatchProcessing';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -188,18 +189,7 @@ export default function Recognition() {
         </TabsContent>
 
         <TabsContent value="batch">
-          <Card className="p-12 border-border bg-card text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
-                <Wand2 className="w-8 h-8 text-muted-foreground" />
-              </div>
-              <h3 className="font-semibold text-lg mb-2">Batch Processing</h3>
-              <p className="text-muted-foreground mb-6">
-                Process multiple masked face images at once. Upload a folder or ZIP file containing your images.
-              </p>
-              <Button>Upload Batch</Button>
-            </div>
-          </Card>
+           <BatchProcessing />
         </TabsContent>
       </Tabs>
     </DashboardLayout>
