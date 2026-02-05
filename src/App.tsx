@@ -43,6 +43,17 @@ function PageLoader() {
   );
 }
 
+// Wrapper to add Suspense to lazy components inside ProtectedRoute
+function LazyProtectedRoute({ children }: { children: React.ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <Suspense fallback={<PageLoader />}>
+        {children}
+      </Suspense>
+    </ProtectedRoute>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -50,20 +61,18 @@ const App = () => (
       <Sonner />
       <AuthProvider>
         <BrowserRouter>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-              <Route path="/recognition" element={<ProtectedRoute><Recognition /></ProtectedRoute>} />
-              <Route path="/databases" element={<ProtectedRoute><Databases /></ProtectedRoute>} />
-              <Route path="/pipeline" element={<ProtectedRoute><Pipeline /></ProtectedRoute>} />
-              <Route path="/metrics" element={<ProtectedRoute><Metrics /></ProtectedRoute>} />
-              <Route path="/activity" element={<ProtectedRoute><Activity /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/" element={<LazyProtectedRoute><Index /></LazyProtectedRoute>} />
+            <Route path="/recognition" element={<LazyProtectedRoute><Recognition /></LazyProtectedRoute>} />
+            <Route path="/databases" element={<LazyProtectedRoute><Databases /></LazyProtectedRoute>} />
+            <Route path="/pipeline" element={<LazyProtectedRoute><Pipeline /></LazyProtectedRoute>} />
+            <Route path="/metrics" element={<LazyProtectedRoute><Metrics /></LazyProtectedRoute>} />
+            <Route path="/activity" element={<LazyProtectedRoute><Activity /></LazyProtectedRoute>} />
+            <Route path="/settings" element={<LazyProtectedRoute><Settings /></LazyProtectedRoute>} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<Suspense fallback={<PageLoader />}><NotFound /></Suspense>} />
+          </Routes>
         </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>
