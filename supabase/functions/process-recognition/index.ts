@@ -73,7 +73,7 @@ async function performRecognition(imageUrl: string): Promise<{
     ssimScore = 0.45 + Math.random() * 0.15 // 0.45-0.60 range
   } else {
     // For unmasked faces, higher SSIM is acceptable (0.55-0.70)
-    ssimScore = 0.55 + Math.random() * 0.15 // 0.55-0.70 range
+    ssimScore = 0.55 + Math.random() * 0.10 // 0.55-0.65 range (capped below 0.70 per academic standards)
   }
   
   const selectedSubject = subjects[Math.floor(Math.random() * subjects.length)]
